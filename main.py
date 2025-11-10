@@ -23,13 +23,17 @@ app.include_router(history.router)
 app.include_router(withdraw_methods.router)
 
 # 🌐 CORS
-FRONTEND_URL = os.getenv("FRONTEND_URL")
-if not FRONTEND_URL:
-    raise RuntimeError("❌ FRONTEND_URL manquant dans le fichier .env")
+FRONTEND_URLS = os.getenv("FRONTEND_URLS")
+
+if not FRONTEND_URLS:
+    raise RuntimeError("❌ FRONTEND_URLS manquant dans le fichier .env")
+
+# On découpe la chaîne en liste (séparée par des virgules)
+origins = [url.strip() for url in FRONTEND_URLS.split(",") if url.strip()]
 
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=[FRONTEND_URL],
+    allow_origins=origins,
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],

@@ -9,6 +9,8 @@ email-validator
 requests
 asyncpg
 passlib
+pytz
 python-jose
 python-multipart
+pyotp
 
