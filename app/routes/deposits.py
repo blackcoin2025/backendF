@@ -36,7 +36,8 @@ async def create_deposit(data: DepositCreate, db: AsyncSession = Depends(get_db)
         transaction_id=data.transaction_id,
         method_id=data.method_id,
         status="pending",
-        country=data.country
+        country=data.country,
+        currency=data.currency,     # <--- OBLIGATOIRE
     )
 
     db.add(deposit)
@@ -51,7 +52,8 @@ async def create_deposit(data: DepositCreate, db: AsyncSession = Depends(get_db)
         amount=deposit.amount,
         transaction_id=deposit.transaction_id,
         status=deposit.status,
-        method_name=method.name
+        method_name=method.name,
+        currency=data.currency,     # <--- OBLIGATOIRE
     )
 
 
