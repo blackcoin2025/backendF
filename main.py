@@ -33,6 +33,7 @@ if not frontend_urls:
     print("⚠️ Avertissement : FRONTEND_URLS manquant, utilisation des valeurs par défaut.")
     origins = [
         "https://blackcoin-v5-frontend.vercel.app",
+        "https://www.blackcoinweb.com",
         "https://admblackcoin.vercel.app",
         "http://localhost:5173",  # utile pour test local
     ]

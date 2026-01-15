@@ -13,99 +13,99 @@ methods = [
     {
         "name": "MTN Benin", "type": "withdrawal", "country": "Benin",
         "icon_url": "/icons/mtn.png", "flag_url": "/flags/benin.png",
-        "account_number": "+2290123456789"
+        "account_number": "+2290154303209"   # ✔️ NEW
     },
     {
         "name": "Moov Benin", "type": "withdrawal", "country": "Benin",
         "icon_url": "/icons/moov.png", "flag_url": "/flags/benin.png",
-        "account_number": "+2290987654321"
+        "account_number": "+2290198914729"   # ✔️ NEW
     },
 
     # TOGO
     {
         "name": "MTN Togo", "type": "withdrawal", "country": "Togo",
         "icon_url": "/icons/mtn.png", "flag_url": "/flags/togo.png",
-        "account_number": "+2280123456789"
+        "account_number": "indisponible"
     },
     {
         "name": "Moov Togo", "type": "withdrawal", "country": "Togo",
         "icon_url": "/icons/moov.png", "flag_url": "/flags/togo.png",
-        "account_number": "+2280987654321"
+        "account_number": "indisponible"
     },
 
     # CÔTE D'IVOIRE
     {
         "name": "MTN Côte d’Ivoire", "type": "withdrawal", "country": "Côte d’Ivoire",
         "icon_url": "/icons/mtn.png", "flag_url": "/flags/coteivoir.png",
-        "account_number": "+2250123456789"
+        "account_number": "+2250504446348"
     },
     {
         "name": "Moov Côte d’Ivoire", "type": "withdrawal", "country": "Côte d’Ivoire",
         "icon_url": "/icons/moov.png", "flag_url": "/flags/coteivoir.png",
-        "account_number": "+2250987654321"
+        "account_number": "indisponible"
     },
     {
         "name": "Orange Côte d’Ivoire", "type": "withdrawal", "country": "Côte d’Ivoire",
         "icon_url": "/icons/orange.png", "flag_url": "/flags/coteivoir.png",
-        "account_number": "+2250112233445"
+        "account_number": "indisponible"
     },
     {
         "name": "Wave Côte d’Ivoire", "type": "withdrawal", "country": "Côte d’Ivoire",
         "icon_url": "/icons/wave.png", "flag_url": "/flags/coteivoir.png",
-        "account_number": "+2250998877665"
+        "account_number": "indisponible"
     },
 
     # SÉNÉGAL
     {
         "name": "Orange Sénégal", "type": "withdrawal", "country": "Sénégal",
         "icon_url": "/icons/orange.png", "flag_url": "/flags/senegal.png",
-        "account_number": "+2210123456789"
+        "account_number": "indisponible"
     },
     {
         "name": "Wave Sénégal", "type": "withdrawal", "country": "Sénégal",
         "icon_url": "/icons/wave.png", "flag_url": "/flags/senegal.png",
-        "account_number": "+2210987654321"
+        "account_number": "indisponible"
     },
 
     # MALI
     {
         "name": "Orange Mali", "type": "withdrawal", "country": "Mali",
         "icon_url": "/icons/orange.png", "flag_url": "/flags/mali.png",
-        "account_number": "+2230123456789"
+        "account_number": "indisponible"
     },
     {
         "name": "Wave Mali", "type": "withdrawal", "country": "Mali",
         "icon_url": "/icons/wave.png", "flag_url": "/flags/mali.png",
-        "account_number": "+2230987654321"
+        "account_number": "indisponible"
     },
 
     # BURKINA-FASO
     {
         "name": "Moov Burkina Faso", "type": "withdrawal", "country": "Burkina-Faso",
         "icon_url": "/icons/moov.png", "flag_url": "/flags/burkina.png",
-        "account_number": "+2260123456789"
+        "account_number": "indisponible"
     },
     {
         "name": "Orange Burkina Faso", "type": "withdrawal", "country": "Burkina-Faso",
         "icon_url": "/icons/orange.png", "flag_url": "/flags/burkina.png",
-        "account_number": "+2260987654321"
+        "account_number": "indisponible"
     },
     {
         "name": "Wave Burkina Faso", "type": "withdrawal", "country": "Burkina-Faso",
         "icon_url": "/icons/wave.png", "flag_url": "/flags/burkina.png",
-        "account_number": "+2260112233445"
+        "account_number": "indisponible"
     },
 
     # CAMEROUN
     {
         "name": "MTN Cameroun", "type": "withdrawal", "country": "Cameroun",
         "icon_url": "/icons/mtn.png", "flag_url": "/flags/cameroun.png",
-        "account_number": "+2370123456789"
+        "account_number": "indisponible"
     },
     {
         "name": "Orange Cameroun", "type": "withdrawal", "country": "Cameroun",
         "icon_url": "/icons/orange.png", "flag_url": "/flags/cameroun.png",
-        "account_number": "+2370987654321"
+        "account_number": "indisponible"
     },
 
     # =================== CRYPTO ===================
