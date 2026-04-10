@@ -2,10 +2,17 @@ from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.future import select
 
-from app.models import Withdrawal, TransactionMethod, User, TransactionHistory, UserPack, Wallet
+from app.models import (
+    Withdrawal,
+    TransactionMethod,
+    User,
+    TransactionHistory,
+    UserPack,
+    RealCash
+)
 from app.database import get_db
 from app.schemas import WithdrawalCreate, WithdrawalResponse
-from app.services.wallet_service import remove_wallet_points
+from app.services.real_cash_service import remove_real_cash
 
 router = APIRouter(prefix="/withdrawals", tags=["Withdrawals"])
 
@@ -14,31 +21,43 @@ router = APIRouter(prefix="/withdrawals", tags=["Withdrawals"])
 # 🔹 Créer une demande de retrait
 # ============================================================
 @router.post("/", response_model=WithdrawalResponse, status_code=status.HTTP_201_CREATED)
-async def create_withdrawal(data: WithdrawalCreate, db: AsyncSession = Depends(get_db)):
-
+async def create_withdrawal(
+    data: WithdrawalCreate,
+    db: AsyncSession = Depends(get_db)
+):
+    # ---- Vérifie utilisateur
     user = await db.get(User, data.user_id)
     if not user:
-        raise HTTPException(status_code=404, detail="Utilisateur introuvable")
+        raise HTTPException(404, "Utilisateur introuvable")
 
+    # ---- Vérifie méthode
     method = await db.get(TransactionMethod, data.method_id)
     if not method or method.type != "withdrawal":
-        raise HTTPException(status_code=400, detail="Méthode de retrait invalide")
+        raise HTTPException(400, "Méthode de retrait invalide")
 
-    wallet_result = await db.execute(select(Wallet).where(Wallet.user_id == user.id))
-    wallet = wallet_result.scalars().first()
+    # ---- Vérifie solde réel
+    result = await db.execute(
+        select(RealCash).where(RealCash.user_id == user.id)
+    )
+    real_cash = result.scalars().first()
 
-    if not wallet or wallet.amount < data.amount:
-        raise HTTPException(status_code=400, detail="Fonds insuffisants")
+    if not real_cash or real_cash.cash_balance < data.amount:
+        raise HTTPException(400, "Fonds insuffisants dans le compte réel")
 
-    pack_result = await db.execute(select(UserPack).where(UserPack.user_id == user.id))
+    # ---- Vérifie pack actif
+    pack_result = await db.execute(
+        select(UserPack).where(UserPack.user_id == user.id)
+    )
     pack = pack_result.scalars().first()
-    if not pack:
-        raise HTTPException(status_code=400, detail="Aucun pack actif trouvé pour cet utilisateur")
 
+    if not pack:
+        raise HTTPException(400, "Aucun pack actif trouvé pour cet utilisateur")
+
+    # ---- Création retrait
     withdrawal = Withdrawal(
         user_id=user.id,
         method_id=method.id,
-        address=data.address,      # ✅ unique champ fourni par l’utilisateur
+        address=data.address,
         amount=data.amount,
         status="pending"
     )
@@ -58,18 +77,21 @@ async def create_withdrawal(data: WithdrawalCreate, db: AsyncSession = Depends(g
 
 
 # ============================================================
-# 🔹 Lister toutes les demandes de retrait
+# 🔹 Lister les retraits
 # ============================================================
 @router.get("/", response_model=list[WithdrawalResponse])
 async def list_withdrawals(db: AsyncSession = Depends(get_db)):
-    result = await db.execute(select(Withdrawal).order_by(Withdrawal.created_at.desc()))
+    result = await db.execute(
+        select(Withdrawal).order_by(Withdrawal.created_at.desc())
+    )
     withdrawals = result.scalars().all()
 
-    response_data = []
+    response = []
+
     for w in withdrawals:
         method = await db.get(TransactionMethod, w.method_id)
 
-        response_data.append(
+        response.append(
             WithdrawalResponse(
                 id=w.id,
                 user_id=w.user_id,
@@ -80,31 +102,37 @@ async def list_withdrawals(db: AsyncSession = Depends(get_db)):
             )
         )
 
-    return response_data
+    return response
 
 
 # ============================================================
 # 🔹 Valider un retrait
 # ============================================================
 @router.post("/{withdrawal_id}/validate")
-async def validate_withdrawal(withdrawal_id: int, db: AsyncSession = Depends(get_db)):
-
-    result = await db.execute(select(Withdrawal).where(Withdrawal.id == withdrawal_id))
+async def validate_withdrawal(
+    withdrawal_id: int,
+    db: AsyncSession = Depends(get_db)
+):
+    result = await db.execute(
+        select(Withdrawal).where(Withdrawal.id == withdrawal_id)
+    )
     withdrawal = result.scalars().first()
 
     if not withdrawal:
-        raise HTTPException(status_code=404, detail="Retrait introuvable")
+        raise HTTPException(404, "Retrait introuvable")
 
     if withdrawal.status != "pending":
-        raise HTTPException(status_code=400, detail="Ce retrait a déjà été traité")
+        raise HTTPException(400, "Retrait déjà traité")
 
     user = await db.get(User, withdrawal.user_id)
     if not user:
-        raise HTTPException(status_code=404, detail="Utilisateur introuvable")
+        raise HTTPException(404, "Utilisateur introuvable")
 
-    await remove_wallet_points(user, withdrawal.amount, db)
+    # ✅ Débit réel (CORRIGÉ)
+    await remove_real_cash(user.id, withdrawal.amount, db)
 
-    history_entry = TransactionHistory(
+    # ---- Historique
+    history = TransactionHistory(
         user_id=user.id,
         method_id=withdrawal.method_id,
         username=user.username,
@@ -113,7 +141,8 @@ async def validate_withdrawal(withdrawal_id: int, db: AsyncSession = Depends(get
         amount=withdrawal.amount,
         status="approved"
     )
-    db.add(history_entry)
+
+    db.add(history)
 
     withdrawal.status = "approved"
 
@@ -121,7 +150,7 @@ async def validate_withdrawal(withdrawal_id: int, db: AsyncSession = Depends(get
     await db.refresh(withdrawal)
 
     return {
-        "message": "Retrait validé, wallet débité et historique mis à jour",
+        "message": "Retrait validé et solde débité",
         "withdrawal_id": withdrawal.id
     }
 
@@ -130,18 +159,22 @@ async def validate_withdrawal(withdrawal_id: int, db: AsyncSession = Depends(get
 # 🔹 Rejeter un retrait
 # ============================================================
 @router.post("/{withdrawal_id}/reject")
-async def reject_withdrawal(withdrawal_id: int, db: AsyncSession = Depends(get_db)):
-
-    result = await db.execute(select(Withdrawal).where(Withdrawal.id == withdrawal_id))
+async def reject_withdrawal(
+    withdrawal_id: int,
+    db: AsyncSession = Depends(get_db)
+):
+    result = await db.execute(
+        select(Withdrawal).where(Withdrawal.id == withdrawal_id)
+    )
     withdrawal = result.scalars().first()
 
     if not withdrawal:
-        raise HTTPException(status_code=404, detail="Retrait introuvable")
+        raise HTTPException(404, "Retrait introuvable")
 
     if withdrawal.status != "pending":
-        raise HTTPException(status_code=400, detail="Ce retrait a déjà été traité")
+        raise HTTPException(400, "Retrait déjà traité")
 
-    history_entry = TransactionHistory(
+    history = TransactionHistory(
         user_id=withdrawal.user_id,
         method_id=withdrawal.method_id,
         username=None,
@@ -150,7 +183,8 @@ async def reject_withdrawal(withdrawal_id: int, db: AsyncSession = Depends(get_d
         amount=withdrawal.amount,
         status="rejected"
     )
-    db.add(history_entry)
+
+    db.add(history)
 
     withdrawal.status = "rejected"
 
@@ -158,6 +192,6 @@ async def reject_withdrawal(withdrawal_id: int, db: AsyncSession = Depends(get_d
     await db.refresh(withdrawal)
 
     return {
-        "message": "Retrait rejeté et historique mis à jour",
+        "message": "Retrait rejeté",
         "withdrawal_id": withdrawal.id
     }

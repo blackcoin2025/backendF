@@ -9,6 +9,7 @@ from app.routers import methods, validator_auth, withdraw_methods
 from app.routes import deposits, withdrawals, history
 from app.database import engine
 from app.models import Base
+from app.routes.blackai import router as blackai_router
 
 # --- Charger les variables d'environnement ---
 load_dotenv()
@@ -23,6 +24,7 @@ app.include_router(methods.router)
 app.include_router(validator_auth.router)
 app.include_router(history.router)
 app.include_router(withdraw_methods.router)
+app.include_router(blackai_router, prefix="/api")
 
 # --- 🌐 Configuration CORS ---
 # Variable d'environnement attendue : FRONTEND_URLS="https://frontend1.com,https://frontend2.com"

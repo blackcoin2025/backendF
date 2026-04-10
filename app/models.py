@@ -143,3 +143,15 @@ class TransactionHistory(Base):
 
     user = relationship("User", back_populates="history")
     transaction_method = relationship("TransactionMethod", back_populates="history")
+
+
+class RealCash(Base):
+    __tablename__ = "real_cash"  # nom différent pour éviter conflit
+
+    id = Column(Integer, primary_key=True)
+    user_id = Column(Integer, ForeignKey("users.id", ondelete="CASCADE"), nullable=False, unique=True)
+    cash_balance = Column(Numeric(12,2), default=0.00, nullable=False)
+    created_at = Column(DateTime, server_default=func.now())
+    updated_at = Column(DateTime, server_default=func.now(), onupdate=func.now())
+
+    user = relationship("User", backref="real_cash")

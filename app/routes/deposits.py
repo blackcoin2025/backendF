@@ -1,13 +1,14 @@
 from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.future import select
+from pydantic import BaseModel
+
 from app.models import Deposit, TransactionMethod, User, TransactionHistory
 from app.schemas import DepositCreate, DepositResponse
 from app.database import get_db
-from app.services.wallet_service import add_wallet_points
+from app.services.real_cash_service import add_real_cash
 
 router = APIRouter(prefix="/deposits", tags=["Deposits"])
-
 
 # ============================================================
 # 🔹 Créer un dépôt
@@ -37,7 +38,7 @@ async def create_deposit(data: DepositCreate, db: AsyncSession = Depends(get_db)
         method_id=data.method_id,
         status="pending",
         country=data.country,
-        currency=data.currency,     # <--- OBLIGATOIRE
+        currency=data.currency,
     )
 
     db.add(deposit)
@@ -53,7 +54,7 @@ async def create_deposit(data: DepositCreate, db: AsyncSession = Depends(get_db)
         transaction_id=deposit.transaction_id,
         status=deposit.status,
         method_name=method.name,
-        currency=data.currency,     # <--- OBLIGATOIRE
+        currency=data.currency,
     )
 
 
@@ -78,7 +79,7 @@ async def list_deposits(db: AsyncSession = Depends(get_db)):
                 transaction_id=deposit.transaction_id,
                 status=deposit.status,
                 method_name=method.name if method else None,
-                currency=deposit.currency  # <-- ajouté ici !
+                currency=deposit.currency
             )
         )
     return deposits_with_method
@@ -100,10 +101,10 @@ async def validate_deposit(deposit_id: int, db: AsyncSession = Depends(get_db)):
     if not user:
         raise HTTPException(status_code=404, detail="Utilisateur introuvable")
 
-    # Ajoute le montant au wallet
-    await add_wallet_points(user, deposit.amount, db)
+    real_cash = await add_real_cash(user.id, float(deposit.amount), db)
+    await db.commit()
+    await db.refresh(real_cash)
 
-    # Crée l'entrée dans l'historique
     history_entry = TransactionHistory(
         user_id=deposit.user_id,
         method_id=deposit.method_id,
@@ -116,13 +117,12 @@ async def validate_deposit(deposit_id: int, db: AsyncSession = Depends(get_db)):
     )
     db.add(history_entry)
 
-    # Met à jour le statut du dépôt
     deposit.status = "approved"
     await db.commit()
     await db.refresh(deposit)
 
     return {
-        "message": "✅ Dépôt validé, wallet crédité et historique mis à jour",
+        "message": "✅ Dépôt validé, RealCash crédité et historique mis à jour",
         "deposit_id": deposit.id,
         "amount": deposit.amount,
     }
@@ -140,7 +140,6 @@ async def reject_deposit(deposit_id: int, db: AsyncSession = Depends(get_db)):
     if deposit.status != "pending":
         raise HTTPException(status_code=400, detail="Ce dépôt a déjà été traité")
 
-    # Crée l'entrée dans l'historique avec status rejeté
     history_entry = TransactionHistory(
         user_id=deposit.user_id,
         method_id=deposit.method_id,
@@ -153,9 +152,58 @@ async def reject_deposit(deposit_id: int, db: AsyncSession = Depends(get_db)):
     )
     db.add(history_entry)
 
-    # Met à jour le statut du dépôt
     deposit.status = "rejected"
     await db.commit()
     await db.refresh(deposit)
 
     return {"message": "🚫 Dépôt rejeté et historique mis à jour", "deposit_id": deposit.id}
+
+
+# ============================================================
+# 🔹 Crédit manuel par email (corrigé)
+# ============================================================
+
+from datetime import datetime
+
+class ManualCredit(BaseModel):
+    email: str
+    amount: float
+
+@router.post("/admin/credit")
+async def credit_user(data: ManualCredit, db: AsyncSession = Depends(get_db)):
+    # Chercher utilisateur par email
+    result = await db.execute(select(User).where(User.email == data.email))
+    user = result.scalars().first()
+
+    if not user:
+        raise HTTPException(status_code=404, detail="Utilisateur introuvable")
+
+    # Créditer RealCash
+    real_cash = await add_real_cash(user.id, data.amount, db)
+    await db.commit()
+    await db.refresh(real_cash)
+
+    # Créer un ID de transaction unique pour le crédit admin
+    transaction_id = f"ADMIN-CREDIT-{int(datetime.utcnow().timestamp())}"
+
+    # Créer l'entrée historique
+    history_entry = TransactionHistory(
+        user_id=user.id,
+        method_id=None,
+        username=user.username,
+        phone=user.phone,
+        transaction_id=transaction_id,  # <-- maintenant jamais None
+        country=None,
+        amount=data.amount,
+        status="approved"
+    )
+    db.add(history_entry)
+    await db.commit()
+    await db.refresh(history_entry)
+
+    return {
+        "message": f"✅ Compte {user.email} crédité avec succès",
+        "user_email": user.email,
+        "amount": data.amount,
+        "transaction_id": transaction_id
+    }
