@@ -13,4 +13,4 @@ pytz
 python-jose
 python-multipart
 pyotp
-
+httpx
