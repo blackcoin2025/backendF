@@ -1,109 +1,19 @@
+import logging
 from fastapi import APIRouter
-from pydantic import BaseModel
-import random
-import re
 
+from app.schemas import Question
+from app.services.intent import normalize, get_special_response
+from app.services.filter import filter_search_results
+from app.services.prompt import build_prompt
+from app.services.cleaner import clean_markdown
 from app.services.search import search_web
 from app.services.ai import generate_answer
 from app.services.cache import get_cache, set_cache
 
 router = APIRouter()
+logger = logging.getLogger(__name__)
 
 
-class Question(BaseModel):
-    question: str
-
-
-# =========================
-# 🔤 NORMALISATION
-# =========================
-def normalize(text: str) -> str:
-    return re.sub(r"[^\w\s]", "", text.lower()).strip()
-
-
-# =========================
-# 🎯 INTENT DETECTION
-# =========================
-GREETINGS = {"salut", "bonjour", "bonsoir", "coucou", "hello", "hey", "yo"}
-THANKS = {"merci", "thanks", "thank you", "thx"}
-GOODBYES = {"au revoir", "bye", "goodbye", "ciao", "adieu"}
-
-
-def detect_intent(text: str) -> str | None:
-    t = normalize(text)
-
-    if t in GOODBYES:
-        return "goodbye"
-
-    # ⚠️ éviter faux positif genre "merci pour info mais..."
-    words = t.split()
-
-    if any(word in THANKS for word in words) and len(words) <= 4:
-        return "thanks"
-
-    if t in GREETINGS:
-        return "greeting"
-
-    return None
-
-
-def get_special_response(question: str) -> str | None:
-    intent = detect_intent(question)
-
-    responses = {
-        "greeting": [
-            "Bonjour ! 👋 Comment puis-je vous aider ?",
-            "Salut ! 😊 Une question ?",
-        ],
-        "thanks": [
-            "Avec plaisir ! 😊",
-            "De rien ! 👍",
-        ],
-        "goodbye": [
-            "Au revoir ! 👋",
-            "À bientôt ! 😊",
-        ],
-    }
-
-    if intent:
-        return random.choice(responses[intent])
-
-    return None
-
-
-# =========================
-# 🔎 FILTER SEARCH
-# =========================
-def filter_search_results(search_data: dict, max_chars: int = 2000) -> str:
-    if not search_data or "results" not in search_data:
-        return "Aucune information pertinente trouvée."
-
-    parts = []
-    total = 0
-
-    for r in search_data["results"]:
-        title = r.get("title", "")
-        content = r.get("content") or r.get("snippet", "")
-
-        if not content:
-            continue
-
-        content = content[:500]
-
-        block = f"Titre: {title}\nExtrait: {content}\n---\n"
-
-        if total + len(block) > max_chars:
-            break
-
-        parts.append(block)
-        total += len(block)
-
-    return "\n".join(parts) if parts else "Informations insuffisantes."
-
-
-# =========================
-# 🚀 ROUTE PRINCIPALE
-# =========================
 @router.post("/blackai")
 async def blackai(data: Question):
     question = data.question.strip()
@@ -113,54 +23,56 @@ async def blackai(data: Question):
 
     normalized_q = normalize(question)
 
-    # 🎯 1. INTENT RAPIDE
+    # 🎯 1. INTENT
     special = get_special_response(question)
     if special:
         return {"source": "direct", "answer": special}
 
-    # 💾 2. CACHE (clé propre)
+    # 💾 2. CACHE
     cached = get_cache(normalized_q)
     if cached:
         return {"source": "cache", "answer": cached}
 
+    # 🔎 3. SEARCH
     try:
-        # 🔎 3. SEARCH
         search_data = await search_web(question)
-
-        # 🧹 4. CLEAN
-        filtered = filter_search_results(search_data)
-
-        # 🧠 5. PROMPT
-        prompt = f"""
-Tu es un assistant intelligent.
-
-Règles :
-- Réponds clairement
-- Structure avec listes ou tableaux si utile
-- N'invente rien
-- Si info insuffisante → dis-le
-
-Données :
-{filtered}
-
-Question :
-{question}
-"""
-
-        # 🤖 6. IA
-        answer = await generate_answer(prompt, question)
-
+        print(f"✅ SEARCH OK: {type(search_data)}")
     except Exception as e:
-        print("❌ ERROR:", e)
-        return {
-            "source": "error",
-            "answer": "❌ Une erreur est survenue. Réessaie plus tard."
-        }
+        print(f"❌ SEARCH ERREUR: {repr(e)}")
+        search_data = {"results": []}
 
-    # 💾 7. CACHE SAVE
+    # 🧹 4. FILTER
+    try:
+        context = filter_search_results(search_data)
+        print(f"✅ CONTEXT OK: {len(context)} chars")
+    except Exception as e:
+        print(f"❌ FILTER ERREUR: {repr(e)}")
+        context = "Aucun contexte disponible."
+
+    # 🧠 5. PROMPT
+    try:
+        prompt = build_prompt(context, question)
+        print(f"✅ PROMPT OK: {len(prompt)} chars")
+    except Exception as e:
+        print(f"❌ PROMPT ERREUR: {repr(e)}")
+        return {"source": "error", "answer": f"❌ Erreur prompt: {e}"}
+
+    # 🤖 6. IA
+    try:
+        raw_answer = await generate_answer(prompt, question)
+        print(f"✅ IA OK: {raw_answer[:100] if raw_answer else 'VIDE'}")
+    except Exception as e:
+        print(f"❌ IA ERREUR: {repr(e)}")
+        return {"source": "error", "answer": f"❌ Erreur IA: {e}"}
+
+    # 🧼 7. CLEAN
+    try:
+        answer = clean_markdown(raw_answer)
+    except Exception as e:
+        print(f"❌ CLEAN ERREUR: {repr(e)}")
+        answer = raw_answer
+
+    # 💾 8. CACHE SAVE
     set_cache(normalized_q, answer)
 
-    return {
-        "source": "live",
-        "answer": answer
-    }
+    return {"source": "live", "answer": answer}

@@ -64,3 +64,10 @@ class WithdrawalResponse(BaseModel):
 
     class Config:
         orm_mode = True
+
+# ============================================================
+# 🤖 SCHEMA LINE AI
+# ============================================================
+
+class Question(BaseModel):
+    question: str

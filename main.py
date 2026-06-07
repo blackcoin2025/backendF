@@ -1,14 +1,16 @@
+# main.py
 import os
 import uvicorn
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from dotenv import load_dotenv
 
-# --- Import interne ---
+# --- Imports internes ---
 from app.routers import methods, validator_auth, withdraw_methods
 from app.routes import deposits, withdrawals, history
-from app.database import engine
+from app.database import engine, lineai_engine, init_db
 from app.models import Base
+from app.lineai_models import LineAIBase
 from app.routes.blackai import router as blackai_router
 
 # --- Charger les variables d'environnement ---
@@ -27,17 +29,15 @@ app.include_router(withdraw_methods.router)
 app.include_router(blackai_router, prefix="/api")
 
 # --- 🌐 Configuration CORS ---
-# Variable d'environnement attendue : FRONTEND_URLS="https://frontend1.com,https://frontend2.com"
 frontend_urls = os.getenv("FRONTEND_URLS")
 
-# Valeurs par défaut pour éviter les crashs si non définie
 if not frontend_urls:
     print("⚠️ Avertissement : FRONTEND_URLS manquant, utilisation des valeurs par défaut.")
     origins = [
         "https://blackcoin-v5-frontend.vercel.app",
         "https://www.blackcoinweb.com",
         "https://admblackcoin.vercel.app",
-        "http://localhost:5173",  # utile pour test local
+        "http://localhost:5173",
     ]
 else:
     origins = [url.strip() for url in frontend_urls.split(",") if url.strip()]
@@ -55,15 +55,7 @@ app.add_middleware(
 def root():
     return {"message": "Wallet deposit backend is running 🚀"}
 
-# --- Initialisation de la base de données ---
-async def init_db():
-    try:
-        async with engine.begin() as conn:
-            await conn.run_sync(Base.metadata.create_all)
-        print("✅ Base de données initialisée et tables vérifiées.")
-    except Exception as e:
-        print(f"❌ Erreur lors de l'initialisation de la base de données : {e}")
-
+# --- Startup ---
 @app.on_event("startup")
 async def on_startup():
     await init_db()
